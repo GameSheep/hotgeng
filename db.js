@@ -85,11 +85,24 @@ db.exec(`
     weight INTEGER NOT NULL DEFAULT 0,
     created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
   );
+  CREATE TABLE IF NOT EXISTS meme_news (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    meme_id INTEGER NOT NULL REFERENCES memes(id) ON DELETE CASCADE,
+    title TEXT NOT NULL,
+    url TEXT NOT NULL,
+    source TEXT NOT NULL DEFAULT '',
+    published_at TEXT NOT NULL DEFAULT '',
+    kind TEXT NOT NULL DEFAULT 'news' CHECK (kind IN ('news', 'analysis', 'source', 'collection')),
+    summary TEXT NOT NULL DEFAULT '',
+    created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    UNIQUE (meme_id, url)
+  );
   CREATE INDEX IF NOT EXISTS idx_memes_status_updated ON memes(status, updated_at DESC);
   CREATE INDEX IF NOT EXISTS idx_revisions_status_created ON revisions(status, created_at DESC);
   CREATE INDEX IF NOT EXISTS idx_tags_status_name ON tags(status, normalized_name);
   CREATE INDEX IF NOT EXISTS idx_meme_tags_tag_meme ON meme_tags(tag_id, meme_id);
   CREATE INDEX IF NOT EXISTS idx_meme_views_day_meme ON meme_views(view_day DESC, meme_id);
+  CREATE INDEX IF NOT EXISTS idx_meme_news_meme_date ON meme_news(meme_id, published_at DESC, id DESC);
 `);
 
 const userColumns = db.prepare('PRAGMA table_info(users)').all().map((column) => column.name);

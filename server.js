@@ -77,7 +77,24 @@ function tagsForMemes(ids) {
 
 function publicMemes(rows) {
   const tagMap = tagsForMemes(rows.map((row) => row.id));
-  return rows.map((row) => ({ ...row, tags: (tagMap.get(row.id) || []).join(','), contributor: row.contributor_name || '编辑部' }));
+  return rows.map((row) => ({
+    ...row,
+    tags: (tagMap.get(row.id) || []).join(','),
+    contributor: row.contributor_name || '编辑部',
+    quality: contentQuality(row)
+  }));
+}
+
+function contentQuality(row) {
+  const values = ['summary', 'origin', 'original_meaning', 'new_meaning', 'usage_scenes'].map((key) => String(row[key] || ''));
+  const legacyTemplate = values.some((value) => /入选或代表|名称最初指向|用于社交媒体评论、群聊接梗|中文论坛、社交媒体或弹幕文化中反复使用/.test(value));
+  const detailed = !legacyTemplate && values[0].length >= 70 && values[1].length >= 100 && values[2].length >= 80 && values[3].length >= 90 && values[4].length >= 90 && String(row.first_appearance || '').length >= 60;
+  return detailed ? 'detailed' : 'needs_review';
+}
+
+function newsForMeme(memeId) {
+  return db.prepare(`SELECT id, title, url, source, published_at, kind, summary FROM meme_news
+    WHERE meme_id = ? ORDER BY CASE WHEN published_at = '' THEN 1 ELSE 0 END, published_at DESC, id DESC`).all(memeId);
 }
 
 function encodeCursor(value) { return Buffer.from(JSON.stringify(value)).toString('base64url'); }
@@ -149,7 +166,7 @@ app.get('/api/memes/:id', (req, res) => {
   const row = db.prepare(`SELECT memes.*, users.username AS contributor_name FROM memes
     LEFT JOIN users ON users.id = memes.contributor_id WHERE memes.id = ? AND memes.status = 'published'`).get(req.params.id);
   if (!row) return res.status(404).json({ error: '热梗不存在' });
-  res.json({ meme: publicMemes([row])[0] });
+  res.json({ meme: { ...publicMemes([row])[0], related_news: newsForMeme(row.id) } });
 });
 
 app.post('/api/memes/:id/view', (req, res) => {

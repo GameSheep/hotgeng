@@ -10,6 +10,13 @@
     "init-admin": "node scripts/init-admin.js",
     "collect-memes": "node scripts/collect-web-memes.js",
     "import-memes": "node scripts/import-web-memes.js",
+    "import-editorial": "node scripts/import-editorial-memes.js",
+    "build-public-data": "node scripts/build-public-dataset.js",
+    "fetch-source-pages": "node scripts/fetch-geng-pages.js",
+    "enrich-full-archive": "node scripts/enrich-full-archive.js",
+    "import-full-archive": "node scripts/import-full-archive.js",
+    "translate-public-archive": "node scripts/translate-public-archive.js",
+    "build-international-data": "node scripts/build-international-dataset.js",
     "test": "node --test"
   },
   "dependencies": {
