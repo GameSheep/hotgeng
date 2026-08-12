@@ -269,7 +269,9 @@ nav a:hover::after, nav a.active::after { transform: scaleX(1); transform-origin
   cursor: pointer;
   font: 600 clamp(16px, 2.15vw, 31px)/1.2 var(--display);
   will-change: transform, opacity;
-  transform: translate3d(calc(-50% + var(--x, 0px)), calc(-50% + var(--y, 0px)), 0) scale(var(--scale, 1));
+  contain: layout paint style;
+  backface-visibility: hidden;
+  transform: translate3d(-50%, -50%, 0);
   transition: color .2s, text-shadow .2s;
 }
 .meme-word:hover, .meme-word:focus-visible { color: var(--signal); text-shadow: 0 0 24px rgba(239, 140, 105, .34); }

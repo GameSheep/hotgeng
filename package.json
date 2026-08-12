@@ -8,6 +8,8 @@
     "start": "node server.js",
     "dev": "node --watch server.js",
     "init-admin": "node scripts/init-admin.js",
+    "collect-memes": "node scripts/collect-web-memes.js",
+    "import-memes": "node scripts/import-web-memes.js",
     "test": "node --test"
   },
   "dependencies": {

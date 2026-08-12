@@ -47,7 +47,8 @@ async function loadMemes(query = '', append = false, options = {}) {
 }
 
 async function loadDiscovery() {
-  const [discovery, tagData] = await Promise.all([api('/api/discover?limit=22'), api('/api/tags?limit=18')]);
+  const compactCloud = window.matchMedia('(max-width: 700px)').matches || (navigator.hardwareConcurrency && navigator.hardwareConcurrency <= 4);
+  const [discovery, tagData] = await Promise.all([api(`/api/discover?limit=${compactCloud ? 16 : 22}`), api('/api/tags?limit=18')]);
   discoverMemes = discovery.memes;
   exploreTags = tagData.tags;
 }
@@ -68,37 +69,56 @@ function setupTagCloud() {
   const points = nodes.map((node, index) => {
     const phi = Math.acos(-1 + (2 * index + 1) / nodes.length);
     const theta = Math.sqrt(nodes.length * Math.PI) * phi;
-    return { node, x: Math.cos(theta) * Math.sin(phi), y: Math.sin(theta) * Math.sin(phi), z: Math.cos(phi) };
+    const heat = Number(node.style.getPropertyValue('--heat')) || 1;
+    return {
+      node,
+      x: Math.cos(theta) * Math.sin(phi),
+      y: Math.sin(theta) * Math.sin(phi),
+      z: Math.cos(phi),
+      heatBoost: node.classList.contains('signal-hot') ? Math.min(Math.log2(heat + 1) * .035, .15) : 0,
+      lastZIndex: null
+    };
   });
   let rotationX = 0.2; let rotationY = -0.35; let dragging = false; let hoveringWord = false; let lastX = 0; let lastY = 0; let travel = 0; let pressedWord = null;
-  let velocityX = .00004; let velocityY = .00018; let visible = true; let frame = 0; let previousTime = performance.now();
+  let velocityX = .00004; let velocityY = .00018; let visible = true; let frame = 0; let previousTime = 0; let radius = 0;
   const reducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
-  const observer = new IntersectionObserver(([entry]) => { visible = entry.isIntersecting; if (visible && !frame) frame = requestAnimationFrame(draw); });
+  const autoFrameInterval = 1000 / 30;
+  const updateRadius = () => { radius = Math.min(cloud.clientWidth, cloud.clientHeight) * .36; requestDraw(); };
+  const resizeObserver = new ResizeObserver(updateRadius);
+  const requestDraw = () => { if (visible && !frame) frame = requestAnimationFrame(draw); };
+  const observer = new IntersectionObserver(([entry]) => { visible = entry.isIntersecting; if (visible) requestDraw(); else if (frame) { cancelAnimationFrame(frame); frame = 0; } });
   observer.observe(cloud);
+  resizeObserver.observe(cloud);
+  updateRadius();
   function draw(time) {
     frame = 0;
     if (!visible || !document.contains(cloud)) return;
-    const delta = Math.min(time - previousTime, 32); previousTime = time;
-    const rect = cloud.getBoundingClientRect(); const radius = Math.min(rect.width, rect.height) * .36;
-    for (const point of points) {
-      const x1 = point.x * Math.cos(rotationY) - point.z * Math.sin(rotationY); const z1 = point.x * Math.sin(rotationY) + point.z * Math.cos(rotationY);
-      const y = point.y * Math.cos(rotationX) - z1 * Math.sin(rotationX); const z = point.y * Math.sin(rotationX) + z1 * Math.cos(rotationX);
-      const heatBoost = point.node.classList.contains('signal-hot') ? Math.min(Math.log2(Number(point.node.style.getPropertyValue('--heat')) + 1) * .035, .15) : 0;
-      const scale = .58 + (z + 1) * .27 + heatBoost;
-      point.node.style.setProperty('--x', `${x1 * radius}px`); point.node.style.setProperty('--y', `${y * radius}px`); point.node.style.setProperty('--scale', scale.toFixed(3));
-      point.node.style.zIndex = String(Math.round((z + 1) * 100)); point.node.style.opacity = String(.35 + (z + 1) * .32);
+    if (!dragging && previousTime && time - previousTime < autoFrameInterval) { requestDraw(); return; }
+    const delta = previousTime ? Math.min(time - previousTime, 48) : 16; previousTime = time;
+    if (!dragging && !hoveringWord && !reducedMotion) {
+      rotationY += velocityY * delta; rotationX += velocityX * delta;
+      velocityY += (.00018 - velocityY) * .035; velocityX += (.00004 - velocityX) * .035;
     }
-    if (!dragging && !hoveringWord && !reducedMotion) { rotationY += velocityY * delta; rotationX += velocityX * delta; velocityY += (.00018 - velocityY) * .035; velocityX += (.00004 - velocityX) * .035; }
-    frame = requestAnimationFrame(draw);
+    const cosY = Math.cos(rotationY); const sinY = Math.sin(rotationY); const cosX = Math.cos(rotationX); const sinX = Math.sin(rotationX);
+    for (const point of points) {
+      const x1 = point.x * cosY - point.z * sinY; const z1 = point.x * sinY + point.z * cosY;
+      const y = point.y * cosX - z1 * sinX; const z = point.y * sinX + z1 * cosX;
+      const scale = .58 + (z + 1) * .27 + point.heatBoost;
+      point.node.style.transform = `translate3d(calc(-50% + ${(x1 * radius).toFixed(2)}px), calc(-50% + ${(y * radius).toFixed(2)}px), 0) scale(${scale.toFixed(3)})`;
+      point.node.style.opacity = (.35 + (z + 1) * .32).toFixed(2);
+      const nextZIndex = Math.round((z + 1) * 100);
+      if (nextZIndex !== point.lastZIndex) { point.node.style.zIndex = String(nextZIndex); point.lastZIndex = nextZIndex; }
+    }
+    if (!dragging && !hoveringWord && !reducedMotion) requestDraw();
   }
   cloud.addEventListener('pointerdown', (event) => { dragging = true; travel = 0; pressedWord = event.target.closest('.meme-word'); lastX = event.clientX; lastY = event.clientY; cloud.classList.add('dragging'); cloud.setPointerCapture(event.pointerId); });
-  cloud.addEventListener('pointermove', (event) => { if (!dragging) return; const dx = event.clientX - lastX; const dy = event.clientY - lastY; travel += Math.hypot(dx, dy); rotationY += dx * .008; rotationX = Math.max(-1.1, Math.min(1.1, rotationX + dy * .008)); velocityY = dx * .00035; velocityX = dy * .0002; lastX = event.clientX; lastY = event.clientY; });
-  const release = (event) => { const clickedWord = pressedWord; const isTap = travel < 7; dragging = false; pressedWord = null; cloud.classList.remove('dragging'); if (isTap && clickedWord && event.type === 'pointerup') clickedWord.click(); };
+  cloud.addEventListener('pointermove', (event) => { if (!dragging) return; const dx = event.clientX - lastX; const dy = event.clientY - lastY; travel += Math.hypot(dx, dy); rotationY += dx * .008; rotationX = Math.max(-1.1, Math.min(1.1, rotationX + dy * .008)); velocityY = dx * .00035; velocityX = dy * .0002; lastX = event.clientX; lastY = event.clientY; requestDraw(); });
+  const release = (event) => { const clickedWord = pressedWord; const isTap = travel < 7; dragging = false; pressedWord = null; cloud.classList.remove('dragging'); previousTime = 0; requestDraw(); if (isTap && clickedWord && event.type === 'pointerup') clickedWord.click(); };
   cloud.addEventListener('pointerup', release); cloud.addEventListener('pointercancel', release);
   cloud.addEventListener('pointerover', (event) => { if (event.target.closest('.meme-word')) hoveringWord = true; });
-  cloud.addEventListener('pointerout', (event) => { if (event.target.closest('.meme-word')) hoveringWord = false; });
-  frame = requestAnimationFrame(draw);
-  stopTagCloud = () => { observer.disconnect(); if (frame) cancelAnimationFrame(frame); frame = 0; };
+  cloud.addEventListener('pointerout', (event) => { if (event.target.closest('.meme-word')) { hoveringWord = false; previousTime = 0; requestDraw(); } });
+  requestDraw();
+  stopTagCloud = () => { observer.disconnect(); resizeObserver.disconnect(); if (frame) cancelAnimationFrame(frame); frame = 0; };
 }
 
 function browse(mode, query = '', options = {}) {
