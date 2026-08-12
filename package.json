@@ -1,0 +1,17 @@
+{
+  "name": "meme-archive",
+  "version": "1.0.0",
+  "private": true,
+  "description": "A human-curated internet meme archive",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js",
+    "dev": "node --watch server.js",
+    "init-admin": "node scripts/init-admin.js",
+    "test": "node --test"
+  },
+  "dependencies": {
+    "better-sqlite3": "^11.7.0",
+    "express": "^4.21.2"
+  }
+}
